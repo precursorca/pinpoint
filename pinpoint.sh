@@ -20,19 +20,13 @@
 # Script name
 scriptname=$(basename -- "$0")
 # Version number
-versionstring="3.4.0b"
-# Feature added by Alex Narvey so that if currently connected to a known SSID the script will except without
-# calling Google APIs as the presumption is made that the location is then already known. This is to further
-# reduce the quantity of Google API calls and keep costs down. If The URL defined is invalid and the CURL
-# fails then this does not operate and the script runs as normal
-#
+versionstring="3.2.8.7"
+# Optimization altered by Alex Narvey 
+# 1) No lookups if the Wifi base station has the same SSID Name as previous lookup
+# 2) No lookup if there are less than 2 Wifi MAC addresses in the JSON we send to Google - since this will just generate a 404 error.
 # Google have further changed the costs for using their APIs and this option can help keep your usage down
 # to a level that is still within their 'free' limit
-# 
-# The webpage being access via the URL is a plain text file with one SSID name per line
-#
-# Define Known Networks list for exemptions below (the name of each Wifi network on a separate line of a .txt file served from a web server)
-KNOWNNETWORKS="https://example.com/SSID.txt"
+
 # get date and time in UTC hence timezone offset is zero
 rundate=`date -u +%Y-%m-%d\ %H:%M:%S\ +0000`
 #echo "$rundate"
@@ -163,7 +157,7 @@ while [ "$1" != "" ]; do
 						commandoptions=1
 						echo "$scriptname Debug = $use_debug"
 						;;
-		-o | --optim )		use_optim="True"
+		-o | --optim )			use_optim="True"
 						commandoptions=1
 						;;
 		-k | --key )			YOUR_API_KEY="$2"
@@ -195,6 +189,10 @@ if [ $commandoptions -eq 0 ]; then
 	PREFERENCE_API_KEY=$(pref_value ${DOMAIN} "YOUR_API_KEY")
 	if [ ! -z "$PREFERENCE_API_KEY" ]; then
 		YOUR_API_KEY="$PREFERENCE_API_KEY"
+	fi
+	PREFERENCE_KNOWN_NETWORKS_URL=$(pref_value ${DOMAIN} "KNOWN_NETWORKS_URL")
+	if [ ! -z "$PREFERENCE_KNOWN_NETWORKS_URL" ]; then
+		KNOWNNETWORKS="$PREFERENCE_KNOWN_NETWORKS_URL"
 	fi
 fi
 #
@@ -283,61 +281,30 @@ else
 	DebugLog "Location services: Disabled"
 fi
 
-# BEGIN known office exemption
-# Get the Current WiFi Network Name
-SSID=$(system_profiler SPAirPortDataType | awk '/Current Network Information:/ { getline; print substr($0, 13, (length($0) - 13)); exit }')
-# Get the list of Office Networks
-SSIDLIST=$(curl -s $KNOWNNETWORKS)
-# Check against the list and exit if the SiFi is set to a known office network
-if printf '%s\0' "${SSIDLIST[@]}" | grep -Fwqz $SSID; then
-    # echo "Yes the SSID is in the list of known office networks"
-    DebugLog "Computer is on a known office network, no lookup required"
-	exit
-fi
-# END known office exemption
 
-#
-# has wifi signal changed - if not then exit
+
+# BEGIN Optimization Code
 if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
 	echo "Using Optimization"
 	DebugLog "Using Optimzation"
-	OldAP=`defaults read "/Library/Application Support/pinpoint/location.plist" TopAP`
-	OldSignal=`defaults read "/Library/Application Support/pinpoint/location.plist" Signal` || OldSignal="0"
-	NewResult="$(echo $gl_ssids | awk '{print substr($0, 1, 22)}' | sort -t '$' -k2,2rn | head -1)" || NewResult=""
-	NewAP="$(echo "$NewResult" | cut -f1 -d '$')" || NewAP=""
-	NewSignal="$(echo "$NewResult" | cut -f2 -d '$')" || NewSignal="0"
-	if [[ "${NewAP}" == "" ]]; then
+# Get SSID Name from previous run
+	OldSSID=`defaults read "/Library/Application Support/pinpoint/location.plist" NewSSID`
+	DebugLog "Old SSID: $OldSSID"
+# Get current SSID Name
+	NewSSID=$SSID
+	if [[ "${NewSSID}" == "" ]]; then
 		DebugLog "blank AP - problem, quitting"
 		exit 1
 	fi
-	defaults write "$resultslocation" TopAP "$NewAP"
-	defaults write "$resultslocation" Signal "$NewSignal"
-	let SignalChange=OldSignal-NewSignal
-	DebugLog "Old AP: $OldAP $OldSignal"
-	DebugLog "New AP: $NewAP $NewSignal"
-	DebugLog "signal change: $SignalChange"
-	thrshld=18
-	moved=0
-	if (( SignalChange > thrshld )) || (( SignalChange < -thrshld )) ; then
-		moved=1
-		DebugLog "significant signal change"
-	else
+	DebugLog "New SSID: $NewSSID"
+	defaults write "$resultslocation" NewSSID "$NewSSID"
+# Test for change in SSID Name 	
+	if [[ $NewSSID == $OldSSID ]] ; then
 		moved=0
-		DebugLog "no significant signal change"
-	fi
-	
-	[ $OldAP ] && [ $NewAP ] && APdiff=$(levenshtein "$OldAP" "$NewAP") || APdiff=17
-	
-	# check how much alike are the AP MAC addresses
-	if [ $APdiff -eq 0 ] ; then
-		DebugLog "same AP"
-	elif [ $APdiff -eq 1 ] ; then
-		DebugLog "same AP, different MAC"
-	elif [ $APdiff -eq 2 ] ; then
-		DebugLog "probably same AP, different MAC"
+		DebugLog "Same Access Point"
 	else
-		DebugLog "AP change"
 		moved=1
+		DebugLog "Different Access Point"
 	fi
 
 	LastError="$(defaults read "$resultslocation" CurrentStatus | grep Error)"
@@ -345,12 +312,7 @@ if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
 
 	DebugLog "Last error: $LastError"
 	DebugLog "Last address: $LastAddress"
-	
-#	if [[ -n "${LastError}" ]] ; then
-#		DebugLog "Running gelocation due to error last time"
-#	fi
-
-#	if (( moved == 1 )) || [[ -n "${LastError}" ]] ; then
+# If the SSID Name has changed do a geolocation run	
 	if (( moved == 1 )) ; then
 		DebugLog "Running gelocation"
 	else
@@ -360,12 +322,11 @@ if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
 	fi
 fi
 
+#Save the current value of the Internal Field Separator variable (IFS) into a new variable called OLD_IFS
 OLD_IFS=$IFS
+#Set the Internal Field Separator value to $
 IFS="$"
 
-# Old Google Maps API - no longer works :(
-# URL="https://maps.googleapis.com/maps/api/browserlocation/json?browser=firefox&sensor=false"
-#
 # Using BSSIDs found above we now need to format this as a JSON request so we can send it using the new Google Geolocation api
 json="{
   "considerIp": "false",
@@ -397,8 +358,24 @@ done
 json+="
   ]
 }"
-
+#Reset the Internal Field Separator value to its old value
 IFS=$OLD_IFS
+
+##BEGIN Base Station Quantity Test
+#Google Geolocation will fail with a 404 (notFound) response if there is less than 2 WiFi MAC addresses in the submitted json
+#So if we don't have 2 or more Wifi Mac Addresses in our $gl_ssids do NOT do a lookup.
+#Get the number of Wifi Mac Addresses in our $gl_ssids
+last=`echo -n "$gl_ssids" | grep -c '^'`
+#If there is less than 2 do NOT do the lookup.
+if (( $last > 1 )) ; then
+	DebugLog  "Running geolocation - we have more than 1 Wifi access point)"
+else
+    DebugLog  "Leaving with geolocation lookup - we have less than 2 access points for Google."
+    defaults write "$resultslocation" LastRun -string "$rundate"
+    exit
+fi
+##END Base Station Quantity Test
+
 #
 # Using list of BSSIDs formatted as JSON query Google for location
 #echo "$json"
