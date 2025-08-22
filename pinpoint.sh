@@ -20,13 +20,19 @@
 # Script name
 scriptname=$(basename -- "$0")
 # Version number
-versionstring="3.2.8.7"
-# Optimization altered by Alex Narvey 
-# 1) No lookups if the Wifi base station has the same SSID Name as previous lookup
-# 2) No lookup if there are less than 2 Wifi MAC addresses in the JSON we send to Google - since this will just generate a 404 error.
+versionstring="3.4.5"
+# Feature added by Alex Narvey so that if currently connected to a known SSID the script will except without
+# calling Google APIs as the presumption is made that the location is then already known. This is to further
+# reduce the quantity of Google API calls and keep costs down. If The URL defined is invalid and the CURL
+# fails then this does not operate and the script runs as normal
+#
 # Google have further changed the costs for using their APIs and this option can help keep your usage down
 # to a level that is still within their 'free' limit
-
+# 
+# The webpage being access via the URL is a plain text file with one SSID name per line
+#
+# Define Known Networks list for exemptions below (the name of each Wifi network on a separate line of a .txt file served from a web server)
+KNOWNNETWORKS="https://www.precursor.ca/precursor/support/SSID.txt"
 # get date and time in UTC hence timezone offset is zero
 rundate=`date -u +%Y-%m-%d\ %H:%M:%S\ +0000`
 #echo "$rundate"
@@ -43,6 +49,7 @@ usage()
 	-a | --altitude		Use Elevation API to look up altitude
 	-k | --key yourkeyhere	Specify your Google API key
 	-d | --debug		Log debug information
+	-n | --known		Avoid calling Google API if device is on a known work wifi network from $KNOWNNETWORKS
 	-o | --optim		Use optmisation to minimise Google API calls"
 }
 
@@ -114,10 +121,8 @@ if (( installed_vers >= 140400 )); then
 #                       DebugLog "pinpoint_scan.py not found"
                         exit 1
                 fi
-                echo "Python"
+                DebugLog "Required Python installed and pinpoint_scan.py found"
         fi
-#       DebugLog "incompatible macOS"
-#       exit 1
 fi
 
 # Set your Google geolocation API key here
@@ -129,6 +134,7 @@ YOUR_API_KEY="pasteyourkeyhere"
 # Set initial default preference values
 use_geocode="True"
 use_altitude="False"
+use_known="False"
 use_optim="False"
 use_debug="False"
 jamf=0
@@ -156,6 +162,9 @@ while [ "$1" != "" ]; do
 		-d | --debug )			use_debug="True"
 						commandoptions=1
 						echo "$scriptname Debug = $use_debug"
+						;;
+		-n | --known)			use_known="True"
+						commandoptions=1
 						;;
 		-o | --optim )			use_optim="True"
 						commandoptions=1
@@ -185,6 +194,7 @@ if [ $commandoptions -eq 0 ]; then
 	use_geocode=$(pref_value ${DOMAIN} "USE_GEOCODE")
 	use_altitude=$(pref_value ${DOMAIN} "USE_ALTITUDE")
 	use_debug=$(pref_value ${DOMAIN} "DEBUG")
+	use_known=$(pref_value ${DOMAIN} "KNOWN_NETWORKS")
 	use_optim=$(pref_value ${DOMAIN} "OPTIMISE")
 	PREFERENCE_API_KEY=$(pref_value ${DOMAIN} "YOUR_API_KEY")
 	if [ ! -z "$PREFERENCE_API_KEY" ]; then
@@ -241,17 +251,45 @@ runAsUser() {
 
 if (( installed_vers >= 140400 )); then
 # If macOS newer than 14.4 then use Python script to get list of SSIDs
-    if gl_ssids="$(runAsUser '/Library/Application Support/pinpoint/bin/pinpoint_scan.py'  | tail -n +2 | awk '{print substr($0, 34, 17)"$"substr($0, 52, 4)"$"substr($0, 1, 32)"$"substr($0, 57, 3)}' | sort -t $ -k2,2rn | head -12 2>&1)"; then
-        rc=0
-        stdout="$gl_ssids"
+# Python script needs location services so run script to if needed enable Location Services
+# It may take two cycles of running this script for it to be fully enabled
+    if [[ "${use_debug}" == "True" ]] || [[ "${use_debug}" == "true" ]] ; then
+        "/Library/Application Support/pinpoint/bin/GrantPythonLocationServiceAccess.sh"
     else
+        "/Library/Application Support/pinpoint/bin/GrantPythonLocationServiceAccess.sh" >/dev/null 2>&1
+    fi
+    if (( installed_vers >= 150000 )); then
+        # It seems 'tail' behaves differently between macOS 14 and 15 and one extra line needs to be stripped
+        # for macOS 15 and higher
+        if gl_ssids="$(runAsUser '/Library/Application Support/pinpoint/bin/pinpoint_scan.py'  | tail -n +2 | awk '{print substr($0, 34, 17)"$"substr($0, 52, 4)"$"substr($0, 1, 32)"$"substr($0, 57, 3)}' | sort -t $ -k2,2rn | sed 's/,$//' | head -12 2>&1)"; then
+            rc=0
+            stdout="$gl_ssids"
+            echo "$stdout"
+        else
 # Likely error is caused by Location Services not yet enabled for Python, script needs to be
 # run at least once first to trigger a request in Privacy & Security which can then be approved.
 # See - https://github.com/jelockwood/pinpoint/wiki/Enabling-Location-Services
-        rc=$?
-        stderr="$gl_ssids"
-	DebugLog "$stderr"
-	exit 1
+            rc=$?
+            stderr="$gl_ssids"
+	    DebugLog "$stderr"
+	    exit 1
+ 	fi
+    else
+        # It seems 'tail' behaves differently between macOS 14 and 15 and one extra line needs to be stripped
+        # for macOS 14
+        if gl_ssids="$(runAsUser '/Library/Application Support/pinpoint/bin/pinpoint_scan.py'  | tail -n +3 | awk '{print substr($0, 34, 17)"$"substr($0, 52, 4)"$"substr($0, 1, 32)"$"substr($0, 57, 3)}' | sort -t $ -k2,2rn | sed 's/,$//' | head -12 2>&1)"; then
+            rc=0
+            stdout="$gl_ssids"
+            echo "$stdout"
+        else
+# Likely error is caused by Location Services not yet enabled for Python, script needs to be
+# run at least once first to trigger a request in Privacy & Security which can then be approved.
+# See - https://github.com/jelockwood/pinpoint/wiki/Enabling-Location-Services
+            rc=$?
+            stderr="$gl_ssids"
+	    DebugLog "$stderr"
+	    exit 1
+        fi
     fi
 else
 # If macOS older than 14.4 use built-in Apple tool to get list of SSIDs
@@ -281,7 +319,24 @@ else
 	DebugLog "Location services: Disabled"
 fi
 
-
+# BEGIN known office exemption
+# Get the Current WiFi Network Name
+if [[ "${use_known}" == "True" ]] || [[ "${use_known}" == "true" ]] ; then
+	echo "Using Known Networks exclusions list"
+	DebugLog "Using Known Networks exclusions list"
+	SSID=$(system_profiler SPAirPortDataType | awk '/Current Network Information:/ { getline; print substr($0, 13, (length($0) - 13)); exit }')
+# Get the list of Office Networks
+	SSIDLIST=$(curl -s $KNOWNNETWORKS)
+# Check against the list and exit if the SiFi is set to a known office network
+	if printf '%s\0' "${SSIDLIST[@]}" | grep -Fwqz $SSID; then
+        echo "Yes the SSID is in the list of known office networks"
+    	DebugLog "Computer is on a known office network, no lookup required"
+	else
+		echo "Do a lookup: the SSID is NOT in the list of known office networks"
+		DebugLog "Do a lookup: the SSID is NOT in the list of known office networks"
+		exit
+fi
+# END known office exemption
 
 # BEGIN Optimization Code
 if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
@@ -322,11 +377,76 @@ if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
 	fi
 fi
 
-#Save the current value of the Internal Field Separator variable (IFS) into a new variable called OLD_IFS
+#
+# has wifi signal changed - if not then exit
+if [[ "${use_optim}" == "True" ]] || [[ "${use_optim}" == "true" ]] ; then
+	echo "Using Optimization"
+	DebugLog "Using Optimzation"
+	OldAP=`defaults read "/Library/Application Support/pinpoint/location.plist" TopAP`
+	OldSignal=`defaults read "/Library/Application Support/pinpoint/location.plist" Signal` || OldSignal="0"
+	NewResult="$(echo $gl_ssids | awk '{print substr($0, 1, 22)}' | sort -t '$' -k2,2rn | head -1)" || NewResult=""
+	NewAP="$(echo "$NewResult" | cut -f1 -d '$')" || NewAP=""
+	NewSignal="$(echo "$NewResult" | cut -f2 -d '$')" || NewSignal="0"
+	if [[ "${NewAP}" == "" ]]; then
+		DebugLog "blank AP - problem, quitting"
+		exit 1
+	fi
+	defaults write "$resultslocation" TopAP "$NewAP"
+	defaults write "$resultslocation" Signal "$NewSignal"
+	let SignalChange=OldSignal-NewSignal
+	DebugLog "Old AP: $OldAP $OldSignal"
+	DebugLog "New AP: $NewAP $NewSignal"
+	DebugLog "signal change: $SignalChange"
+	thrshld=18
+	moved=0
+	if (( SignalChange > thrshld )) || (( SignalChange < -thrshld )) ; then
+		moved=1
+		DebugLog "significant signal change"
+	else
+		moved=0
+		DebugLog "no significant signal change"
+	fi
+	
+	[ $OldAP ] && [ $NewAP ] && APdiff=$(levenshtein "$OldAP" "$NewAP") || APdiff=17
+	
+	# check how much alike are the AP MAC addresses
+	if [ $APdiff -eq 0 ] ; then
+		DebugLog "same AP"
+	elif [ $APdiff -eq 1 ] ; then
+		DebugLog "same AP, different MAC"
+	elif [ $APdiff -eq 2 ] ; then
+		DebugLog "probably same AP, different MAC"
+	else
+		DebugLog "AP change"
+		moved=1
+	fi
+
+	LastError="$(defaults read "$resultslocation" CurrentStatus | grep Error)"
+	LastAddress="$(defaults read "$resultslocation" Address)"
+
+	DebugLog "Last error: $LastError"
+	DebugLog "Last address: $LastAddress"
+	
+#	if [[ -n "${LastError}" ]] ; then
+#		DebugLog "Running gelocation due to error last time"
+#	fi
+
+#	if (( moved == 1 )) || [[ -n "${LastError}" ]] ; then
+	if (( moved == 1 )) ; then
+		DebugLog "Running gelocation"
+	else
+		DebugLog "Boring wifi, leaving"
+		defaults write "$resultslocation" LastRun -string "$rundate"
+		exit
+	fi
+fi
+
 OLD_IFS=$IFS
-#Set the Internal Field Separator value to $
 IFS="$"
 
+# Old Google Maps API - no longer works :(
+# URL="https://maps.googleapis.com/maps/api/browserlocation/json?browser=firefox&sensor=false"
+#
 # Using BSSIDs found above we now need to format this as a JSON request so we can send it using the new Google Geolocation api
 json="{
   "considerIp": "false",
@@ -358,8 +478,9 @@ done
 json+="
   ]
 }"
-#Reset the Internal Field Separator value to its old value
+
 IFS=$OLD_IFS
+#
 
 ##BEGIN Base Station Quantity Test
 #Google Geolocation will fail with a 404 (notFound) response if there is less than 2 WiFi MAC addresses in the submitted json
@@ -376,7 +497,7 @@ else
 fi
 ##END Base Station Quantity Test
 
-#
+
 # Using list of BSSIDs formatted as JSON query Google for location
 #echo "$json"
 DebugLog "Getting coordinates"
