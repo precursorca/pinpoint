@@ -57,9 +57,9 @@ $PLISTBUDDYLOC -c "Delete :ProgramArguments" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments array" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:1 string ${SCRIPT}" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:2 string ${KNOWN_ROUTINE}" $PLISTLOC
-$PLISTBUDDYLOC -c "Add :ProgramArguments:2 string ${OPT_ROUTINE}" $PLISTLOC
-$PLISTBUDDYLOC -c "Add :ProgramArguments:3 string ${EXPLICIT_KEY}" $PLISTLOC
-$PLISTBUDDYLOC -c "Add :ProgramArguments:4 string ${API_KEY}" $PLISTLOC
+$PLISTBUDDYLOC -c "Add :ProgramArguments:3 string ${OPT_ROUTINE}" $PLISTLOC
+$PLISTBUDDYLOC -c "Add :ProgramArguments:4 string ${EXPLICIT_KEY}" $PLISTLOC
+$PLISTBUDDYLOC -c "Add :ProgramArguments:5 string ${API_KEY}" $PLISTLOC
 #Load the LaunchDaemon
 if [ -f "$DAEMON" ]; then
 /bin/launchctl unload $DAEMON
