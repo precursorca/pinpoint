@@ -331,10 +331,10 @@ if [[ "${use_known}" == "True" ]] || [[ "${use_known}" == "true" ]] ; then
 	if printf '%s\0' "${SSIDLIST[@]}" | grep -Fwqz $SSID; then
         echo "Yes the SSID is in the list of known office networks"
     	DebugLog "Computer is on a known office network, no lookup required"
+    	exit
 	else
 		echo "Do a lookup: the SSID is NOT in the list of known office networks"
 		DebugLog "Do a lookup: the SSID is NOT in the list of known office networks"
-		exit
 	fi
 fi
 # END known office exemption
