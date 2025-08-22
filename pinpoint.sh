@@ -335,6 +335,7 @@ if [[ "${use_known}" == "True" ]] || [[ "${use_known}" == "true" ]] ; then
 		echo "Do a lookup: the SSID is NOT in the list of known office networks"
 		DebugLog "Do a lookup: the SSID is NOT in the list of known office networks"
 		exit
+	fi
 fi
 # END known office exemption
 
