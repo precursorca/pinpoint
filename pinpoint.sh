@@ -32,7 +32,7 @@ versionstring="3.4.5"
 # The webpage being access via the URL is a plain text file with one SSID name per line
 #
 # Define Known Networks list for exemptions below (the name of each Wifi network on a separate line of a .txt file served from a web server)
-KNOWNNETWORKS="https://www.precursor.ca/precursor/support/SSID.txt"
+KNOWNNETWORKS="YOUR KNOWN NETWORKS .txt URL GOES HERE"
 # get date and time in UTC hence timezone offset is zero
 rundate=`date -u +%Y-%m-%d\ %H:%M:%S\ +0000`
 #echo "$rundate"
