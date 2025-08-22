@@ -6,6 +6,7 @@ PLISTBUDDYLOC="/usr/libexec/plistbuddy"
 PLISTLOC="/Library/LaunchDaemons/com.jelockwood.pinpoint.plist"
 DAEMON="/Library/LaunchDaemons/com.jelockwood.pinpoint.plist"
 SCRIPT="/Library/Application\ Support/pinpoint/bin/pinpoint.sh"
+OPT_ROUTINE="-n"
 OPT_ROUTINE="-o"
 EXPLICIT_KEY="-k"
 /usr/sbin/chown -R root:wheel "/Library/Application Support/pinpoint"
@@ -51,10 +52,11 @@ runAsUser '/Library/Application Support/pinpoint/bin/pinpoint_scan.py'
 
 "/Library/Application Support/pinpoint/bin/GrantPythonLocationServiceAccess.sh"
 
-#Tell LaunchDaemon file to use the optimization option in the program argument
+#Tell LaunchDaemon file to use the optimization option and the known network option in the program argument
 $PLISTBUDDYLOC -c "Delete :ProgramArguments" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments array" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:1 string ${SCRIPT}" $PLISTLOC
+$PLISTBUDDYLOC -c "Add :ProgramArguments:2 string ${KNOWN_ROUTINE}" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:2 string ${OPT_ROUTINE}" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:3 string ${EXPLICIT_KEY}" $PLISTLOC
 $PLISTBUDDYLOC -c "Add :ProgramArguments:4 string ${API_KEY}" $PLISTLOC
