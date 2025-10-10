@@ -20,7 +20,7 @@
 # Script name
 scriptname=$(basename -- "$0")
 # Version number
-versionstring="3.4.5"
+versionstring="3.4.6"
 # Feature added by Alex Narvey so that if currently connected to a known SSID the script will except without
 # calling Google APIs as the presumption is made that the location is then already known. This is to further
 # reduce the quantity of Google API calls and keep costs down. If The URL defined is invalid and the CURL
@@ -321,10 +321,12 @@ fi
 
 # BEGIN known office exemption
 # Get the Current WiFi Network Name
+ipconfig setverbose 1
+SSID=$(ipconfig getsummary en0 | awk -F ' SSID : ' '/ SSID : / {print $2}')
+ipconfig setverbose 0
 if [[ "${use_known}" == "True" ]] || [[ "${use_known}" == "true" ]] ; then
 	echo "Using Known Networks exclusions list"
 	DebugLog "Using Known Networks exclusions list"
-	SSID=$(system_profiler SPAirPortDataType | awk '/Current Network Information:/ { getline; print substr($0, 13, (length($0) - 13)); exit }')
 # Get the list of Office Networks
 	SSIDLIST=$(curl -s $KNOWNNETWORKS)
 # Check against the list and exit if the SiFi is set to a known office network
