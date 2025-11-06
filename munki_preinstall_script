@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Determine who owns the console session
+logged_in_user=$(stat -f%Su /dev/console)
+
+if [ "$logged_in_user" = "root" ]; then
+    echo "No user logged in. Skipping installation."
+    exit 1    # Non-zero exit prevents Munki from installing
+else
+    echo "User '$logged_in_user' is logged in. Proceeding with installation."
+    exit 0    # Zero exit allows Munki to continue
+fi
