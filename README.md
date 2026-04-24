@@ -32,7 +32,7 @@ More information about this version can be found on the [Wiki](https://github.co
 
 # Notes
 
-For GrantPythonLocationServiceAccess.sh to work the method that delivers it has to have Full Disk Access. If you are using munki then you must deliver a profile via MDM to accomplish this as per: https://github.com/munki/munki/wiki/PPPC-Privacy-permissions#munki-7
+For `GrantPythonLocationServiceAccess.sh` to work the method that delivers it has to have Full Disk Access. If you are using munki then you must deliver a profile via MDM to accomplish this as per: https://github.com/munki/munki/wiki/PPPC-Privacy-permissions#munki-7
 
 # Legal Notice
 
