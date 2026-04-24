@@ -30,6 +30,10 @@ More information about this version can be found on the [Wiki](https://github.co
 
 :bangbang: Munkireport users [read this](https://github.com/jelockwood/pinpoint/wiki/MunkiReport-Setup)! :bangbang:
 
+# Notes
+
+For GrantPythonLocationServiceAccess.sh to work the method that delivers it has to have Full Disk Access. If you are using munki then you must deliver a profile via MDM to accomplish this as per: https://github.com/munki/munki/wiki/PPPC-Privacy-permissions#munki-7
+
 # Legal Notice
 
 > pinpoint should only be installed on devices that you have authorization to do so on. Data collected from this project is directly uploaded to Google, Inc. via Geocoding APIs for in order to locate your Mac.
