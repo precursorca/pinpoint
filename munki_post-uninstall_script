@@ -1,4 +1,4 @@
 #!/bin/bash
 launchctl unload /Library/LaunchDaemons/com.jelockwood.pinpoint.plist
 rm -rf /Library/LaunchDaemons/com.jelockwood.pinpoint.plist
-rm -rf Library/Application\ Support/pinpoint
+rm -rf /Library/Application\ Support/pinpoint
