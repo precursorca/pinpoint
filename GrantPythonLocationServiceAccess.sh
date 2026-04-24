@@ -4,6 +4,8 @@
 # DESC:  When the script runs, it will make a copy of the existing location services
 #	/var/db/locationd/client.plist to be used in case a revert is needed. Following, we swap 0's
 #	to 1's within the client.plist for Teams and Teams helper to enable them. 
+# In order to succeed the delivery method requires Full Disk Access privileges. If you are using munki please refer to:
+# https://github.com/munki/munki/wiki/PPPC-Privacy-permissions#munki-7
 # REFS:   N/A
 #
 # Author: Bill Addis
